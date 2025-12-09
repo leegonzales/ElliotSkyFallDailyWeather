@@ -15,6 +15,9 @@ dotenvConfig();
 /**
  * Configuration schema with validation
  */
+// Transform empty strings to undefined
+const emptyToUndefined = z.string().transform(s => s === '' ? undefined : s).optional();
+
 const configSchema = z.object({
   // Episode Settings
   broadcastTime: z.string().regex(/^\d{2}:\d{2}$/).default('22:00'),
@@ -22,17 +25,17 @@ const configSchema = z.object({
   episodeStartNumber: z.coerce.number().min(1).default(1),
 
   // Claude (Script Generation)
-  anthropicApiKey: z.string().min(1).optional(),
+  anthropicApiKey: emptyToUndefined,
   claudeModel: z.string().default('claude-sonnet-4-20250514'),
 
   // ElevenLabs (Audio)
-  elevenlabsApiKey: z.string().min(1).optional(),
-  elliotVoiceId: z.string().optional(),
+  elevenlabsApiKey: emptyToUndefined,
+  elliotVoiceId: emptyToUndefined,
 
   // Image Generation
   imageProvider: z.enum(['gemini', 'openai']).default('gemini'),
-  geminiApiKey: z.string().min(1).optional(),
-  openaiApiKey: z.string().min(1).optional(),
+  geminiApiKey: emptyToUndefined,
+  openaiApiKey: emptyToUndefined,
 
   // Paths
   outputDir: z.string().default('./output'),

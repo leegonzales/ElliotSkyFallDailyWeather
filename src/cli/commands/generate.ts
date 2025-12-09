@@ -145,12 +145,42 @@ export async function generateCommand(options: GenerateOptions): Promise<void> {
     console.log('');
 
     // Phase 2: Generate script
-    spinner.start('Generating Elliot Skyfall script...');
+    spinner.start('Generating Elliot Skyfall script with Claude...');
     await updateEpisodeStatus(db, episode.id, 'generating');
 
-    // TODO: Implement script generation
-    await sleep(500); // Placeholder
-    spinner.succeed('Script generated');
+    const { generateScript, isClaudeAvailable } = await import('../../script/generator');
+
+    if (!isClaudeAvailable()) {
+      spinner.warn('Claude API key not configured - skipping script generation');
+      console.log(chalk.dim('  Set ANTHROPIC_API_KEY in .env to enable script generation\n'));
+    } else {
+      const scriptResult = await generateScript({
+        weatherData: formatWeatherForScript(weatherData),
+        broadcastDate,
+        broadcastTime,
+        episodeNumber,
+        isStaleData: weatherData.isStale,
+        staleAge: weatherData.staleAge,
+      });
+
+      // Update episode with script
+      await db
+        .update(schema.episodes)
+        .set({ script: scriptResult.script })
+        .where(eq(schema.episodes.id, episode.id));
+
+      spinner.succeed(`Script generated (${scriptResult.wordCount} words, ~${Math.round(scriptResult.estimatedDurationSecs / 60)}min)`);
+
+      // Show script preview
+      console.log(chalk.dim(`\n  Graphic cues: ${scriptResult.graphicCues.length}`));
+      for (const cue of scriptResult.graphicCues.slice(0, 3)) {
+        console.log(chalk.dim(`    - ${cue.description} (${cue.duration}s)`));
+      }
+      if (scriptResult.graphicCues.length > 3) {
+        console.log(chalk.dim(`    ... and ${scriptResult.graphicCues.length - 3} more`));
+      }
+      console.log('');
+    }
 
     // Phase 3: Media generation (parallel)
     if (options.images !== false || options.video !== false) {
