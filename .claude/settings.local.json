@@ -13,7 +13,11 @@
       "Bash(codex exec \"$(cat <<''EOF''\nReview this architecture for a simplified daily weather video show system:\n\nPROJECT CONTEXT:\n- Daily automated weather broadcast for Denver, CO\n- Character: Elliot Skyfall, Art Bell-inspired late-night weather broadcaster\n- Video output with AI-generated images, weather graphics, TTS audio\n- Simplified version of a more complex AI Talk Show CLI system\n- Single AI (Claude) for script generation, single voice (ElevenLabs TTS)\n\nARCHITECTURE:\n1. CLI Interface (Commander.js) - User commands\n2. Episode Orchestrator - Coordinates pipeline\n3. Weather Fetcher - NWS AFD + digital forecast parsing\n4. Script Generator - Claude API for Elliot character scripts with [GRAPHIC:] cues\n5. Audio Synthesizer - ElevenLabs TTS with character timestamps\n6. Image Generator - AI images (atmospheric, weather graphics)\n7. Video Composer - Remotion for final video with synced captions\n8. Storage - SQLite for episode tracking\n\nDATA FLOW:\nFetch weather → Generate script → Parse graphic cues → \nParallel: (audio synthesis) + (image generation) → \nVideo composition → Save episode\n\nCONCERNS:\n1. Is parallel audio/image generation correct?\n2. Should images be cached (character portrait, etc)?\n3. SQLite appropriate for daily episodes?\n4. NWS API failure handling?\n5. Weather graphic timing alignment with script?\n\nProvide: Strengths, weaknesses, risks, specific recommendations.\nEOF\n)\")",
       "mcp__plugin_beads_beads__update",
       "mcp__plugin_beads_beads__stats",
-      "Bash(git -C /Users/leegonzales/Projects/leegonzales/ElliotSkyFallDailyWeather add -A)"
+      "Bash(git -C /Users/leegonzales/Projects/leegonzales/ElliotSkyFallDailyWeather add -A)",
+      "Bash(git commit:*)",
+      "Bash(npm install:*)",
+      "Bash(npm run dev:*)",
+      "Bash(npm run generate:*)"
     ],
     "deny": [],
     "ask": []

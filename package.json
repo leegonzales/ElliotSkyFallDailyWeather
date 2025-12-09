@@ -1,0 +1,59 @@
+{
+  "name": "elliot-skyfall-weather",
+  "version": "0.1.0",
+  "description": "Daily weather broadcast generator featuring Elliot Skyfall, an Art Bell-inspired late-night weather broadcaster",
+  "type": "module",
+  "bin": {
+    "esw": "./dist/cli/index.js"
+  },
+  "scripts": {
+    "dev": "tsx src/cli/index.ts",
+    "build": "tsc",
+    "db:push": "drizzle-kit push",
+    "db:studio": "drizzle-kit studio",
+    "generate": "tsx src/cli/index.ts generate",
+    "preview": "tsx src/cli/index.ts generate --preview",
+    "list": "tsx src/cli/index.ts list"
+  },
+  "keywords": [
+    "weather",
+    "broadcast",
+    "video",
+    "tts",
+    "ai",
+    "denver",
+    "cli"
+  ],
+  "author": "Lee Gonzales",
+  "license": "MIT",
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.37.0",
+    "@elevenlabs/elevenlabs-js": "^2.26.0",
+    "@google/genai": "^1.31.0",
+    "@remotion/bundler": "^4.0.0",
+    "@remotion/media-utils": "^4.0.375",
+    "@remotion/renderer": "^4.0.0",
+    "better-sqlite3": "^11.0.0",
+    "chalk": "^5.3.0",
+    "commander": "^12.0.0",
+    "dotenv": "^16.4.5",
+    "drizzle-orm": "^0.39.1",
+    "nanoid": "^5.0.7",
+    "ora": "^8.0.0",
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0",
+    "remotion": "^4.0.0",
+    "zod": "^3.24.2"
+  },
+  "devDependencies": {
+    "@types/better-sqlite3": "^7.6.11",
+    "@types/node": "^20.14.0",
+    "@types/react": "^18.2.0",
+    "drizzle-kit": "^0.31.7",
+    "tsx": "^4.19.0",
+    "typescript": "^5.6.3"
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  }
+}
