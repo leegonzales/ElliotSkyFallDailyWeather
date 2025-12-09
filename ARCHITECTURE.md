@@ -1,8 +1,8 @@
 # Elliot Skyfall Daily Weather - Architecture
 
-**Version:** 1.0.0
-**Last Updated:** 2025-12-07
-**Status:** Peer Reviewed (Gemini + Codex) - Ready for Implementation
+**Version:** 1.1.0
+**Last Updated:** 2025-12-09
+**Status:** Implemented - Full video generation pipeline operational
 
 ---
 
@@ -358,45 +358,51 @@ DATABASE_PATH=./data/elliot.db
 
 ## Implementation Phases
 
-### Phase 1: Foundation (Day 1)
-- [ ] Project setup (package.json, tsconfig)
-- [ ] Database schema and migrations
-- [ ] Config loader
-- [ ] CLI scaffolding
+### Phase 1: Foundation (Day 1) ✅
+- [x] Project setup (package.json, tsconfig)
+- [x] Database schema and migrations
+- [x] Config loader
+- [x] CLI scaffolding
 
-### Phase 2: Weather Integration (Day 1-2)
-- [ ] NWS AFD fetcher
-- [ ] Digital forecast fetcher
-- [ ] Weather data parsers
-- [ ] Weather type definitions
+### Phase 2: Weather Integration (Day 1-2) ✅
+- [x] NWS AFD fetcher
+- [x] Digital forecast fetcher
+- [x] Weather data parsers
+- [x] Weather type definitions
 
-### Phase 3: Script Generation (Day 2)
-- [ ] Claude integration
-- [ ] Prompt builder with character context
-- [ ] Graphic cue parser
+### Phase 3: Script Generation (Day 2) ✅
+- [x] Claude integration
+- [x] Prompt builder with character context
+- [x] Graphic cue parser with duration extraction
 
-### Phase 4: Audio Pipeline (Day 2-3)
-- [ ] Port ElevenLabs service
-- [ ] Voice configuration for Elliot
-- [ ] Audio synthesis workflow
+### Phase 4: Audio Pipeline (Day 2-3) ✅
+- [x] ElevenLabs TTS integration
+- [x] Voice configuration for Elliot
+- [x] Audio synthesis with character timestamps
 
-### Phase 5: Image Generation (Day 3)
-- [ ] Image generator abstraction
-- [ ] Weather graphic prompts
-- [ ] Atmospheric image prompts
+### Phase 5: Image Generation (Day 3) ✅
+- [x] Gemini 3 Pro Image model integration
+- [x] Text-free atmospheric weather visuals
+- [x] Image caching system
 
-### Phase 6: Video Composition (Day 3-4)
-- [ ] Port Remotion patterns
-- [ ] WeatherBroadcast composition
-- [ ] Timeline with graphic overlays
-- [ ] Caption synchronization
+### Phase 6: Video Composition (Day 3-4) ✅
+- [x] Remotion integration
+- [x] WeatherBroadcast composition
+- [x] Glass panel lower-third overlays
+- [x] Weather icons based on conditions
+- [x] Show branding (lower-right with mic logo)
+- [x] CatalystAI credit
+- [x] Audio-reactive mic pulsing
+- [x] Progress bar at bottom
+- [x] Summary slide with weather recap
+- [x] Fade to black ending
 
-### Phase 7: CLI & Polish (Day 4)
-- [ ] Generate command
-- [ ] Preview command
-- [ ] List command
-- [ ] Progress indicators
-- [ ] Error handling
+### Phase 7: CLI & Polish (Day 4) ✅
+- [x] Generate command with state resume
+- [x] Preview command (--preview flag)
+- [x] List command
+- [x] Progress indicators (ora spinners)
+- [x] Error handling with retry logic
 
 ---
 
@@ -437,11 +443,39 @@ DATABASE_PATH=./data/elliot.db
 
 ---
 
-## Next Steps
+## Video Composition Features
 
-1. **Begin Phase 1** - Initialize project structure
-2. **Test NWS endpoints** - Verify data availability
-3. **Explore ElevenLabs voices** - Find Elliot's voice
-4. **Generate test images** - Establish visual style
+The Remotion-based video composition (`src/video/WeatherBroadcast.tsx`) includes:
 
-See `IMPLEMENTATION_PLAN.md` for detailed phase breakdown.
+### Visual Design
+- **Glass Panel Lower-Third**: Frosted glass info panel in lower-left with:
+  - Vertical orange accent bar
+  - Weather icon (contextual based on conditions)
+  - Temperature extraction and display
+  - Title and subtitle text
+- **Show Branding** (lower-right):
+  - Audio-reactive microphone logo with pulse effect
+  - "ELLIOT SKYFALL WEATHER" text stack
+  - Timestamp
+  - CatalystAI credit badge
+- **Progress Bar**: Orange gradient bar at bottom showing video progress
+- **Ken Burns Effect**: Subtle zoom on background images
+- **Summary Slide**: End card with weather recap and sign-off
+- **Fade to Black**: 2-second fade at video end
+
+### Technical Features
+- `useAudioData` + `visualizeAudio` from `@remotion/media-utils` for audio reactivity
+- Spring animations for smooth element entrances
+- Temperature extraction with case-insensitive regex
+- Weather icon mapping based on condition keywords
+
+---
+
+## Future Enhancements
+
+1. **Automated scheduling** - cron/launchd for daily generation
+2. **YouTube upload integration** - Auto-publish episodes
+3. **Multiple locations** - Expand beyond Denver
+4. **Weather alerts** - Priority notifications for severe weather
+
+See `IMPLEMENTATION_PLAN.md` for original planning reference.

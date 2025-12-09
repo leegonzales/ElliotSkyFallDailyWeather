@@ -18,7 +18,14 @@
       "Bash(npm install:*)",
       "Bash(npm run dev:*)",
       "Bash(npm run generate:*)",
-      "Bash(echo:*)"
+      "Bash(echo:*)",
+      "Bash(sqlite3:*)",
+      "Bash(node -e:*)",
+      "Bash(npx tsx:*)",
+      "Bash(npx tsc:*)",
+      "Bash(ffprobe:*)",
+      "Bash(open:*)",
+      "Bash(ls:*)"
     ],
     "deny": [],
     "ask": []

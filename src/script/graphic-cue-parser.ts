@@ -6,6 +6,9 @@
 
 import type { GraphicCue } from './types';
 
+// Re-export GraphicCue for consumers
+export type { GraphicCue } from './types';
+
 /**
  * Parse graphic cues from script text
  */

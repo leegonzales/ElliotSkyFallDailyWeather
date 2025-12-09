@@ -9,6 +9,7 @@ import { Command } from 'commander';
 import chalk from 'chalk';
 import { generateCommand } from './commands/generate';
 import { listCommand } from './commands/list';
+import { voicesCommand } from './commands/voices';
 import { hasEnvFile } from '../utils/config';
 
 const program = new Command();
@@ -37,10 +38,10 @@ program
 program
   .command('generate')
   .description('Generate a new weather broadcast episode')
-  .option('-d, --date <date>', 'Broadcast date (YYYY-MM-DD)', undefined)
-  .option('-p, --preview', 'Preview script only (no audio/video)', false)
-  .option('--no-images', 'Skip image generation', false)
-  .option('--no-video', 'Skip video generation (audio only)', false)
+  .option('-d, --date <date>', 'Broadcast date (YYYY-MM-DD)')
+  .option('-p, --preview', 'Preview script only (no audio/video)')
+  .option('--no-images', 'Skip image generation')
+  .option('--no-video', 'Skip video generation (audio only)')
   .action(async (options) => {
     console.log(banner);
     await generateCommand(options);
@@ -54,6 +55,15 @@ program
   .action(async (options) => {
     console.log(banner);
     await listCommand(options);
+  });
+
+// Voices command
+program
+  .command('voices')
+  .description('List available ElevenLabs voices')
+  .action(async () => {
+    console.log(banner);
+    await voicesCommand();
   });
 
 // Show command

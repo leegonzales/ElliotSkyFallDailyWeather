@@ -7,9 +7,15 @@
 import chalk from 'chalk';
 import ora from 'ora';
 import { nanoid } from 'nanoid';
+import { join } from 'node:path';
+import { mkdirSync, existsSync } from 'node:fs';
 import { getConfig, getBroadcastDate, getBroadcastTime, validateApiKeys } from '../../utils/config';
 import { getDb, initializeDb, schema } from '../../storage/db';
 import { eq } from 'drizzle-orm';
+import { synthesizeAudio, isElevenLabsAvailable } from '../../audio/synthesizer';
+import { generateImagesForCues, isGeminiAvailable } from '../../images/generator';
+import { parseGraphicCues } from '../../script/graphic-cue-parser';
+import { buildTimeline, renderVideo, isRemotionAvailable } from '../../video';
 
 export interface GenerateOptions {
   date?: string;
@@ -182,34 +188,140 @@ export async function generateCommand(options: GenerateOptions): Promise<void> {
       console.log('');
     }
 
-    // Phase 3: Media generation (parallel)
-    if (options.images !== false || options.video !== false) {
-      spinner.start('Generating media assets...');
+    // Phase 3: Audio synthesis
+    const config = getConfig();
+    const outputDir = join(config.outputDir, broadcastDate);
+
+    // Ensure output directory exists
+    if (!existsSync(outputDir)) {
+      mkdirSync(outputDir, { recursive: true });
+    }
+
+    // Get the script from database (may have been generated in previous run)
+    const currentEpisode = await db
+      .select()
+      .from(schema.episodes)
+      .where(eq(schema.episodes.id, episode.id))
+      .limit(1);
+
+    const script = currentEpisode[0]?.script;
+
+    if (!script) {
+      throw new Error('No script available for audio synthesis');
+    }
+
+    let audioPath: string | undefined;
+    let audioDuration: number | undefined;
+
+    if (options.video !== false) {
+      spinner.start('Synthesizing audio with ElevenLabs...');
       await updateEpisodeStatus(db, episode.id, 'synthesizing');
 
-      // TODO: Implement parallel audio + image generation
-      await sleep(500); // Placeholder
-      spinner.succeed('Media assets generated');
+      if (!isElevenLabsAvailable()) {
+        spinner.warn('ElevenLabs not configured - skipping audio synthesis');
+        console.log(chalk.dim('  Set ELEVENLABS_API_KEY and ELLIOT_VOICE_ID in .env\n'));
+      } else {
+        const audioOutputPath = join(outputDir, `episode-${episodeNumber}.mp3`);
+        const audioResult = await synthesizeAudio(script, audioOutputPath);
+
+        audioPath = audioResult.audioPath;
+        audioDuration = audioResult.duration;
+
+        // Update episode with audio info
+        await db
+          .update(schema.episodes)
+          .set({
+            audioPath: audioResult.audioPath,
+            durationSecs: audioResult.duration,
+          })
+          .where(eq(schema.episodes.id, episode.id));
+
+        spinner.succeed(`Audio synthesized (${audioDuration.toFixed(1)}s)`);
+        console.log(chalk.dim(`  Output: ${audioPath}\n`));
+      }
     }
 
-    // Phase 4: Timeline sync
-    if (options.video !== false) {
-      spinner.start('Synchronizing timeline...');
-      await updateEpisodeStatus(db, episode.id, 'syncing');
+    // Phase 4: Image generation
+    if (options.images !== false) {
+      spinner.start('Generating images...');
 
-      // TODO: Implement timeline sync
-      await sleep(500); // Placeholder
-      spinner.succeed('Timeline synchronized');
+      if (!isGeminiAvailable()) {
+        spinner.warn('Gemini not configured - skipping image generation');
+        console.log(chalk.dim('  Set GEMINI_API_KEY in .env\n'));
+      } else {
+        // Parse graphic cues from script
+        const graphicCues = parseGraphicCues(script);
+
+        if (graphicCues.length === 0) {
+          spinner.info('No graphic cues found in script');
+        } else {
+          spinner.text = `Generating ${graphicCues.length} images...`;
+          console.log(''); // New line for sub-progress
+
+          const imageResults = await generateImagesForCues(
+            graphicCues.map(cue => ({ description: cue.description })),
+            outputDir
+          );
+
+          const cachedCount = imageResults.filter(r => r.cached).length;
+          spinner.succeed(`Generated ${imageResults.length} images (${cachedCount} cached)`);
+        }
+      }
     }
 
-    // Phase 5: Video composition
+    // Phase 5: Timeline sync and Video composition
     if (options.video !== false) {
-      spinner.start('Composing video with Remotion...');
-      await updateEpisodeStatus(db, episode.id, 'composing');
+      if (!audioPath || !audioDuration) {
+        spinner.warn('No audio available - skipping video composition');
+      } else if (!isRemotionAvailable()) {
+        spinner.warn('Remotion not available - skipping video composition');
+      } else {
+        // Build timeline
+        spinner.start('Building timeline...');
+        await updateEpisodeStatus(db, episode.id, 'syncing');
 
-      // TODO: Implement video rendering
-      await sleep(500); // Placeholder
-      spinner.succeed('Video composed');
+        const graphicCues = parseGraphicCues(script);
+
+        // Build weather summary for end slide
+        const weatherSummary = weatherData ? {
+          temperature: `${weatherData.forecast.current.temperature}°F`,
+          conditions: weatherData.forecast.current.conditions,
+          wind: `${weatherData.forecast.current.windDirection} ${weatherData.forecast.current.windSpeed} mph`,
+          hazards: weatherData.afd.hazards.map((h: { type: string }) => h.type),
+          outlook: '', // Extended outlook handled in script
+        } : undefined;
+
+        const timeline = buildTimeline({
+          graphicCues,
+          audioPath,
+          audioDuration,
+          imagesDir: outputDir,
+          // Use current time for broadcast date (not the weather data date)
+          broadcastDate: new Date().toISOString(),
+          location: 'Denver, Colorado',
+          weatherSummary,
+        });
+
+        spinner.succeed(`Timeline built (${timeline.segments.length} segments, ${timeline.durationInFrames} frames)`);
+
+        // Render video
+        spinner.start('Rendering video with Remotion...');
+        await updateEpisodeStatus(db, episode.id, 'composing');
+
+        const videoOutputPath = join(outputDir, `episode-${episodeNumber}.mp4`);
+        const videoResult = await renderVideo(timeline, {
+          outputPath: videoOutputPath,
+        });
+
+        // Update episode with video path
+        await db
+          .update(schema.episodes)
+          .set({ videoPath: videoResult.videoPath })
+          .where(eq(schema.episodes.id, episode.id));
+
+        spinner.succeed(`Video rendered (${videoResult.durationSecs.toFixed(1)}s)`);
+        console.log(chalk.dim(`  Output: ${videoResult.videoPath}\n`));
+      }
     }
 
     // Mark complete
