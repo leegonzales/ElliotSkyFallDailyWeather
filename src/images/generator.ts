@@ -9,6 +9,7 @@ import { writeFileSync, existsSync, mkdirSync, copyFileSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { createHash } from 'node:crypto';
 import { getConfig } from '../utils/config';
+import type { BroadcastTimeContext } from '../utils/time-context';
 import { getDb, schema } from '../storage/db';
 import { eq, and } from 'drizzle-orm';
 import { nanoid } from 'nanoid';
@@ -17,6 +18,11 @@ export interface ImageGenerationRequest {
   prompt: string;
   imageType: 'atmospheric' | 'weather_graphic' | 'character';
   outputPath: string;
+  timeContext?: BroadcastTimeContext;
+}
+
+export interface ImageGenerationOptions {
+  timeContext?: BroadcastTimeContext;
 }
 
 export interface ImageGenerationResult {
@@ -150,8 +156,8 @@ export async function generateImage(
 
   const client = getClient();
 
-  // Build style-enhanced prompt
-  const stylePrompt = buildStylePrompt(request.prompt, request.imageType);
+  // Build style-enhanced prompt with time context
+  const stylePrompt = buildStylePrompt(request.prompt, request.imageType, request.timeContext);
 
   try {
     // Use Gemini Imagen for image generation
@@ -212,19 +218,81 @@ export async function generateImage(
 }
 
 /**
+ * Build time-of-day specific lighting and mood descriptions
+ */
+function buildTimeOfDayMood(timeContext?: BroadcastTimeContext): string {
+  if (!timeContext) {
+    // Default to late-night aesthetic
+    return `
+      Time of day: Late night
+      Lighting: Deep night, city lights in distance, stars visible if clear
+      Mood keywords: mysterious, contemplative, intimate, cosmic
+    `;
+  }
+
+  const moodKeywords = timeContext.imageMood.join(', ');
+
+  switch (timeContext.timeOfDay) {
+    case 'early-morning':
+      return `
+        Time of day: Pre-dawn (4-8 AM)
+        Lighting: Deep blue sky transitioning to lighter horizon, first hints of sunrise, stars fading
+        Mood keywords: ${moodKeywords}
+        Atmosphere: The quiet anticipation before dawn, city still sleeping, streetlights still on
+      `;
+
+    case 'morning':
+      return `
+        Time of day: Morning (8 AM - 12 PM)
+        Lighting: Golden sunrise light, warm orange and yellow tones, long dramatic shadows
+        Mood keywords: ${moodKeywords}
+        Atmosphere: Fresh morning energy, the world waking up, clear visibility
+      `;
+
+    case 'afternoon':
+      return `
+        Time of day: Afternoon (12 PM - 5 PM)
+        Lighting: Full daylight, bright blue sky, direct sunlight, clear conditions
+        Mood keywords: ${moodKeywords}
+        Atmosphere: Active hours, full visibility, high contrast lighting
+      `;
+
+    case 'evening':
+      return `
+        Time of day: Evening (5 PM - 10 PM)
+        Lighting: Golden hour fading to dusk, warm orange and pink sky, city lights emerging
+        Mood keywords: ${moodKeywords}
+        Atmosphere: Day transitioning to night, warmth giving way to cool tones
+      `;
+
+    case 'late-night':
+    default:
+      return `
+        Time of day: Late night (10 PM - 4 AM)
+        Lighting: Deep night, city lights glowing, stars visible, dramatic shadows
+        Mood keywords: ${moodKeywords}
+        Atmosphere: Cosmic mystery, intimate solitude, the quiet hours when only night owls remain
+      `;
+  }
+}
+
+/**
  * Build a style-enhanced prompt for the image type
  *
  * IMPORTANT: We avoid ALL text in generated images because AI image generators
  * produce garbled, unreadable text. Text overlays will be added via Remotion.
  */
-function buildStylePrompt(prompt: string, imageType: string): string {
+function buildStylePrompt(prompt: string, imageType: string, timeContext?: BroadcastTimeContext): string {
+  const timeOfDayMood = buildTimeOfDayMood(timeContext);
+
   const baseStyle = `
     CRITICAL: DO NOT include ANY text, words, letters, numbers, labels, or writing in this image.
     NO text of any kind - the image should be purely visual with no written elements.
 
     Style: Cinematic, broadcast-quality, 16:9 aspect ratio.
-    Aesthetic: Late-night mystery broadcast (Coast to Coast AM vibes).
-    Color palette: Deep blues, purples, warm amber accents, dramatic lighting.
+    Aesthetic: Atmospheric weather broadcast (Coast to Coast AM vibes).
+
+    ${timeOfDayMood}
   `;
 
   switch (imageType) {
@@ -232,15 +300,19 @@ function buildStylePrompt(prompt: string, imageType: string): string {
       return `
         ${baseStyle}
 
-        Create a moody, atmospheric background scene for a late-night weather broadcast.
-        Think: starry desert skies over distant mountains, dramatic cloud formations at dusk,
-        aurora borealis over snow-capped peaks, foggy valleys with subtle light.
+        Create a moody, atmospheric background scene for a weather broadcast.
+        The lighting and colors should match the time of day specified above.
+
+        For late night: starry desert skies, dramatic cloud formations, aurora borealis
+        For morning: sunrise colors, misty valleys, golden light breaking through
+        For afternoon: dramatic cumulus clouds, clear blue skies, sun-drenched landscapes
+        For evening: sunset colors, transitional lighting, warm to cool gradients
 
         Evoke mystery and contemplation. Cinematic composition.
 
         Scene concept: ${prompt}
 
-        Remember: NO TEXT whatsoever in the image.
+        Remember: NO TEXT whatsoever in the image. Match the time of day mood.
       `;
 
     case 'weather_graphic':
@@ -248,6 +320,8 @@ function buildStylePrompt(prompt: string, imageType: string): string {
         ${baseStyle}
 
         Create a PURELY VISUAL weather scene - NO text, numbers, or labels.
+        The lighting and atmosphere should match the time of day specified above.
+
         Show the weather conditions through dramatic imagery:
         - For wind: swaying trees, blowing leaves, rippling flags
         - For snow: falling flakes, snow-covered landscape, frost patterns
@@ -256,21 +330,27 @@ function buildStylePrompt(prompt: string, imageType: string): string {
         - For storms: dramatic clouds, lightning, atmospheric tension
 
         Make it cinematic and evocative, like a movie still.
+        Ensure the lighting matches the time of day (night scenes should be dark, morning should have sunrise colors, etc.)
 
         Weather to visualize: ${prompt}
 
         IMPORTANT: Absolutely NO text, numbers, temperature readings, or labels.
-        Pure visual storytelling only.
+        Pure visual storytelling only. Match the time of day lighting.
       `;
 
     case 'character':
       return `
         ${baseStyle}
 
-        Create a stylized portrait of a mysterious late-night radio broadcaster.
+        Create a stylized portrait of a mysterious radio broadcaster.
         Style: Film noir meets 1990s talk radio. Dramatic side lighting.
         The figure is silhouetted or partially lit, contemplative, knowledgeable.
         Background: vintage radio equipment, glowing dials, warm amber lights.
+
+        The ambient lighting should subtly reflect the time of day:
+        - Late night: darker, more mysterious, studio lights prominent
+        - Morning/afternoon: some natural light filtering through window blinds
+        - Evening: warm transition lighting, golden hour glow
 
         Think: Art Bell in his studio, mysterious and inviting.
 
@@ -289,7 +369,8 @@ function buildStylePrompt(prompt: string, imageType: string): string {
  */
 export async function generateImagesForCues(
   cues: Array<{ description: string; type?: string }>,
-  outputDir: string
+  outputDir: string,
+  options: ImageGenerationOptions = {}
 ): Promise<ImageGenerationResult[]> {
   const results: ImageGenerationResult[] = [];
 
@@ -305,6 +386,7 @@ export async function generateImagesForCues(
       prompt: cue.description,
       imageType,
       outputPath,
+      timeContext: options.timeContext,
     });
 
     results.push(result);

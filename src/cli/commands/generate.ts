@@ -10,6 +10,7 @@ import { nanoid } from 'nanoid';
 import { join } from 'node:path';
 import { mkdirSync, existsSync } from 'node:fs';
 import { getConfig, getBroadcastDate, getBroadcastTime, validateApiKeys } from '../../utils/config';
+import { buildTimeContext, buildCurrentTimeContext, type BroadcastTimeContext } from '../../utils/time-context';
 import { getDb, initializeDb, schema } from '../../storage/db';
 import { eq } from 'drizzle-orm';
 import { synthesizeAudio, isElevenLabsAvailable } from '../../audio/synthesizer';
@@ -18,7 +19,9 @@ import { parseGraphicCues } from '../../script/graphic-cue-parser';
 import { buildTimeline, renderVideo, isRemotionAvailable } from '../../video';
 
 export interface GenerateOptions {
+  for?: string;
   date?: string;
+  location?: string;
   preview?: boolean;
   images?: boolean;
   video?: boolean;
@@ -28,11 +31,49 @@ export async function generateCommand(options: GenerateOptions): Promise<void> {
   const spinner = ora();
 
   try {
-    // Determine broadcast date
-    const broadcastDate = options.date || getBroadcastDate();
-    const broadcastTime = getBroadcastTime();
+    // Build time context from --for option or use current time
+    let timeContext: BroadcastTimeContext;
 
-    console.log(chalk.bold(`\nGenerating episode for ${chalk.cyan(broadcastDate)}\n`));
+    if (options.for) {
+      try {
+        timeContext = buildTimeContext(options.for);
+        console.log(chalk.bold(`\nTarget: ${chalk.cyan(timeContext.description)}`));
+        console.log(chalk.dim(`  Time of day: ${timeContext.timeOfDay} (${timeContext.isLateNight ? 'Art Bell mode' : 'standard'})`));
+        console.log(chalk.dim(`  Atmosphere: ${timeContext.atmosphericTone}`));
+        console.log('');
+      } catch (e) {
+        console.error(chalk.red(`Could not parse time: "${options.for}"`));
+        console.log(chalk.dim('  Examples: "now", "tonight 9pm", "tomorrow morning"'));
+        process.exit(1);
+      }
+    } else if (options.date) {
+      // Legacy --date support
+      timeContext = buildTimeContext(`${options.date} at ${getBroadcastTime()}`);
+    } else {
+      // Default to now
+      timeContext = buildCurrentTimeContext();
+    }
+
+    const broadcastDate = timeContext.date;
+    const broadcastTime = timeContext.time;
+
+    // Set location if specified
+    const { setLocation, getCurrentLocation, LOCATIONS } = await import('../../weather/fetcher');
+
+    if (options.location) {
+      try {
+        setLocation(options.location);
+        console.log(chalk.bold(`Location: ${chalk.cyan(getCurrentLocation().name)}`));
+      } catch (e) {
+        console.error(chalk.red(`Invalid location: "${options.location}"`));
+        console.log(chalk.dim(`  Available: ${Object.keys(LOCATIONS).join(', ')}`));
+        process.exit(1);
+      }
+    }
+
+    const locationName = getCurrentLocation().name;
+
+    console.log(chalk.bold(`Generating episode for ${chalk.cyan(locationName)} on ${chalk.cyan(broadcastDate)} at ${chalk.cyan(broadcastTime)}\n`));
 
     // Initialize database
     spinner.start('Initializing database...');
@@ -161,12 +202,14 @@ export async function generateCommand(options: GenerateOptions): Promise<void> {
       console.log(chalk.dim('  Set ANTHROPIC_API_KEY in .env to enable script generation\n'));
     } else {
       const scriptResult = await generateScript({
-        weatherData: formatWeatherForScript(weatherData),
+        weatherData: formatWeatherForScript(weatherData, timeContext),
         broadcastDate,
         broadcastTime,
         episodeNumber,
         isStaleData: weatherData.isStale,
         staleAge: weatherData.staleAge,
+        timeContext,
+        location: locationName,
       });
 
       // Update episode with script
@@ -260,7 +303,8 @@ export async function generateCommand(options: GenerateOptions): Promise<void> {
 
           const imageResults = await generateImagesForCues(
             graphicCues.map(cue => ({ description: cue.description })),
-            outputDir
+            outputDir,
+            { timeContext }
           );
 
           const cachedCount = imageResults.filter(r => r.cached).length;
@@ -298,7 +342,7 @@ export async function generateCommand(options: GenerateOptions): Promise<void> {
           imagesDir: outputDir,
           // Use current time for broadcast date (not the weather data date)
           broadcastDate: new Date().toISOString(),
-          location: 'Denver, Colorado',
+          location: locationName,
           weatherSummary,
         });
 

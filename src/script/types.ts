@@ -4,6 +4,8 @@
  * Type definitions for script generation.
  */
 
+import type { BroadcastTimeContext } from '../utils/time-context';
+
 /**
  * Graphic cue extracted from script
  */
@@ -26,6 +28,8 @@ export interface ScriptGenerationRequest {
   episodeNumber: number;
   isStaleData: boolean;
   staleAge?: number;
+  timeContext?: BroadcastTimeContext; // Time-of-day awareness
+  location?: string; // Location name (e.g., "New York City", "Denver, Colorado")
 }
 
 /**

@@ -60,6 +60,13 @@ export async function renderVideo(
   }
   copyFileSync(timeline.audioPath, audioPublicPath);
 
+  // Copy Catalyst logo from project public folder
+  const projectPublicDir = resolve(__dirname, '../../public');
+  const catalystLogoSrc = join(projectPublicDir, 'catalyst-logo.jpeg');
+  if (existsSync(catalystLogoSrc)) {
+    copyFileSync(catalystLogoSrc, join(publicDir, 'catalyst-logo.jpeg'));
+  }
+
   // Update timeline with public paths and copy images
   const publicTimeline: VideoTimeline = {
     ...timeline,

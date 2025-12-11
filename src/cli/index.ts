@@ -38,7 +38,9 @@ program
 program
   .command('generate')
   .description('Generate a new weather broadcast episode')
-  .option('-d, --date <date>', 'Broadcast date (YYYY-MM-DD)')
+  .option('-f, --for <time>', 'Target broadcast time (e.g., "now", "tonight 9pm", "tomorrow morning")')
+  .option('-l, --location <location>', 'Location for weather data (e.g., "denver", "nyc")')
+  .option('-d, --date <date>', 'Broadcast date (YYYY-MM-DD) - overridden by --for')
   .option('-p, --preview', 'Preview script only (no audio/video)')
   .option('--no-images', 'Skip image generation')
   .option('--no-video', 'Skip video generation (audio only)')

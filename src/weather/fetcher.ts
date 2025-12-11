@@ -7,13 +7,68 @@
 import { parseAFD } from './afd-parser';
 import { parseForecast } from './forecast-parser';
 import type { WeatherData, WeatherFetchResult, AFDData, ForecastData } from './types';
+import type { BroadcastTimeContext } from '../utils/time-context';
 import { getDb, schema } from '../storage/db';
 import { nanoid } from 'nanoid';
 import { desc, eq } from 'drizzle-orm';
 
-// NWS endpoints for Denver/Boulder
-const NWS_AFD_URL = 'https://forecast.weather.gov/product.php?site=BOU&issuedby=BOU&product=AFD&format=txt&version=1&glossary=0';
-const NWS_FORECAST_URL = 'https://forecast.weather.gov/MapClick.php?lat=39.77&lon=-104.89&unit=0&lg=english&FcstType=digital';
+// Location configurations for NWS data
+export interface LocationConfig {
+  name: string;
+  nwsOffice: string;
+  lat: number;
+  lon: number;
+  timezone: string;
+}
+
+export const LOCATIONS: Record<string, LocationConfig> = {
+  denver: {
+    name: 'Denver, Colorado',
+    nwsOffice: 'BOU', // Boulder NWS office
+    lat: 39.77,
+    lon: -104.89,
+    timezone: 'America/Denver',
+  },
+  nyc: {
+    name: 'New York City',
+    nwsOffice: 'OKX', // New York NWS office
+    lat: 40.7128,
+    lon: -74.0060,
+    timezone: 'America/New_York',
+  },
+};
+
+// Current location (can be changed via setLocation)
+let currentLocation: LocationConfig = LOCATIONS.denver;
+
+/**
+ * Set the active location for weather fetching
+ */
+export function setLocation(locationKey: string): void {
+  const loc = LOCATIONS[locationKey.toLowerCase()];
+  if (!loc) {
+    throw new Error(`Unknown location: ${locationKey}. Available: ${Object.keys(LOCATIONS).join(', ')}`);
+  }
+  currentLocation = loc;
+}
+
+/**
+ * Get the current location
+ */
+export function getCurrentLocation(): LocationConfig {
+  return currentLocation;
+}
+
+/**
+ * Build NWS URLs for current location
+ */
+function getNWSUrls(): { afd: string; forecast: string } {
+  const { nwsOffice, lat, lon } = currentLocation;
+  return {
+    afd: `https://forecast.weather.gov/product.php?site=${nwsOffice}&issuedby=${nwsOffice}&product=AFD&format=txt&version=1&glossary=0`,
+    forecast: `https://forecast.weather.gov/MapClick.php?lat=${lat}&lon=${lon}&unit=0&lg=english&FcstType=digital`,
+  };
+}
 
 // Retry configuration
 const MAX_RETRIES = 3;
@@ -88,7 +143,8 @@ export async function fetchWeatherData(episodeId?: string): Promise<WeatherFetch
  * Fetch Area Forecast Discussion
  */
 async function fetchAFD(): Promise<AFDData> {
-  const response = await fetch(NWS_AFD_URL, {
+  const urls = getNWSUrls();
+  const response = await fetch(urls.afd, {
     headers: {
       'User-Agent': 'ElliotSkyfallWeather/1.0 (weather broadcast generator)',
     },
@@ -118,7 +174,8 @@ async function fetchAFD(): Promise<AFDData> {
  * Fetch digital forecast
  */
 async function fetchForecast(): Promise<ForecastData> {
-  const response = await fetch(NWS_FORECAST_URL, {
+  const urls = getNWSUrls();
+  const response = await fetch(urls.forecast, {
     headers: {
       'User-Agent': 'ElliotSkyfallWeather/1.0 (weather broadcast generator)',
     },
@@ -219,9 +276,33 @@ export async function hasRecentWeatherData(): Promise<boolean> {
 }
 
 /**
+ * Get the forecast focus description based on time of day
+ */
+function getForecastFocusLabel(timeContext?: BroadcastTimeContext): string {
+  if (!timeContext) {
+    return '12-HOUR OUTLOOK';
+  }
+
+  switch (timeContext.timeOfDay) {
+    case 'early-morning':
+      return 'TODAY\'S FORECAST (what to expect as the day unfolds)';
+    case 'morning':
+      return 'REST OF TODAY (through tonight)';
+    case 'afternoon':
+      return 'EVENING AND OVERNIGHT OUTLOOK';
+    case 'evening':
+      return 'OVERNIGHT AND TOMORROW PREVIEW';
+    case 'late-night':
+      return 'OVERNIGHT AND TOMORROW MORNING';
+    default:
+      return '12-HOUR OUTLOOK';
+  }
+}
+
+/**
  * Format weather data for script generation
  */
-export function formatWeatherForScript(data: WeatherData): string {
+export function formatWeatherForScript(data: WeatherData, timeContext?: BroadcastTimeContext): string {
   const { afd, forecast, isStale, staleAge } = data;
   const current = forecast.current;
 
@@ -230,6 +311,12 @@ export function formatWeatherForScript(data: WeatherData): string {
   // Stale data warning
   if (isStale) {
     output += `[DATA NOTE: Using cached weather data from ${staleAge} hours ago. Fresh data was unavailable.]\n\n`;
+  }
+
+  // Time context reminder
+  if (timeContext) {
+    output += `[BROADCAST TIME: ${timeContext.timeOfDay} broadcast for ${timeContext.date} at ${timeContext.time} MST]\n`;
+    output += `[FORECAST EMPHASIS: ${timeContext.forecastFocus}]\n\n`;
   }
 
   // Current conditions
@@ -267,8 +354,9 @@ export function formatWeatherForScript(data: WeatherData): string {
     output += afd.discussion.slice(0, 1500) + '...\n\n';
   }
 
-  // Hourly outlook (next 12 hours)
-  output += `12-HOUR OUTLOOK:\n`;
+  // Hourly outlook with time-context-aware label
+  const forecastLabel = getForecastFocusLabel(timeContext);
+  output += `${forecastLabel}:\n`;
   for (let i = 0; i < Math.min(12, forecast.hourly.length); i++) {
     const h = forecast.hourly[i];
     output += `- Hour ${h.hour}: ${h.temperature}°F, ${h.weatherDescription}, Wind ${h.windDirection} ${h.windSpeed}mph\n`;

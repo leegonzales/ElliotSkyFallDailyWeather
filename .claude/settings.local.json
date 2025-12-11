@@ -25,7 +25,11 @@
       "Bash(npx tsc:*)",
       "Bash(ffprobe:*)",
       "Bash(open:*)",
-      "Bash(ls:*)"
+      "Bash(ls:*)",
+      "Bash(git push:*)",
+      "Bash(gh repo view:*)",
+      "Bash(gh repo create:*)",
+      "Bash(git add:*)"
     ],
     "deny": [],
     "ask": []
